@@ -118,7 +118,7 @@
                 <span class="score ai-score" id="aiScore">0</span>
             </div>
         </div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <canvas id="gameCanvas" width="400" height="700"></canvas>
         <div class="controls">
             <p><strong>操作方法:</strong></p>
             <p>← → キー: 左右移動 | ↑ キー: ジャンプ | スペースキー: シュート</p>
@@ -165,8 +165,8 @@
                 this.y += this.vy;
 
                 // 地面との衝突
-                if (this.y + this.height >= canvas.height - 50) {
-                    this.y = canvas.height - 50 - this.height;
+                if (this.y + this.height >= canvas.height - 30) {
+                    this.y = canvas.height - 30 - this.height;
                     this.vy = 0;
                     this.onGround = true;
                 } else {
@@ -178,8 +178,8 @@
                 this.vx *= FRICTION;
 
                 // 画面端での制限
-                if (this.x < 0) this.x = 0;
-                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.x < 30) this.x = 30;
+                if (this.x + this.width > canvas.width - 30) this.x = canvas.width - 30 - this.width;
             }
 
             draw() {
@@ -231,38 +231,36 @@
                 this.y += this.vy;
 
                 // 地面との衝突
-                if (this.y + this.radius >= canvas.height - 50) {
-                    this.y = canvas.height - 50 - this.radius;
+                if (this.y + this.radius >= canvas.height - 30) {
+                    this.y = canvas.height - 30 - this.radius;
                     this.vy *= -BALL_BOUNCE;
                     this.vx *= FRICTION;
                 }
 
                 // 壁との衝突
-                if (this.x - this.radius <= 0 || this.x + this.radius >= canvas.width) {
+                if (this.x - this.radius <= 30 || this.x + this.radius >= canvas.width - 30) {
                     this.vx *= -1;
-                    this.x = this.x < canvas.width / 2 ? this.radius : canvas.width - this.radius;
+                    this.x = this.x < canvas.width / 2 ? 30 + this.radius : canvas.width - 30 - this.radius;
                 }
 
                 // 天井との衝突
-                if (this.y - this.radius <= 0) {
-                    this.y = this.radius;
+                if (this.y - this.radius <= 30) {
+                    this.y = 30 + this.radius;
                     this.vy *= -BALL_BOUNCE;
                 }
 
-                // ゴール判定
-                if (this.y + this.radius >= canvas.height - 50) {
-                    // 左ゴール (AIの得点)
-                    if (this.x < 100) {
-                        game.aiScore++;
-                        aiScoreEl.textContent = game.aiScore;
-                        this.reset();
-                    }
-                    // 右ゴール (プレイヤーの得点)
-                    if (this.x > canvas.width - 100) {
-                        game.playerScore++;
-                        playerScoreEl.textContent = game.playerScore;
-                        this.reset();
-                    }
+                // ゴール判定 - 上ゴール (AIの得点)
+                if (this.y - this.radius <= 30 && this.x > canvas.width / 2 - 60 && this.x < canvas.width / 2 + 60) {
+                    game.aiScore++;
+                    aiScoreEl.textContent = game.aiScore;
+                    this.reset();
+                }
+
+                // ゴール判定 - 下ゴール (プレイヤーの得点)
+                if (this.y + this.radius >= canvas.height - 30 && this.x > canvas.width / 2 - 60 && this.x < canvas.width / 2 + 60) {
+                    game.playerScore++;
+                    playerScoreEl.textContent = game.playerScore;
+                    this.reset();
                 }
             }
 
@@ -309,8 +307,8 @@
         // ゲームクラス
         class Game {
             constructor() {
-                this.player = new Player(100, canvas.height - 150, '#2196F3');
-                this.ai = new Player(canvas.width - 130, canvas.height - 150, '#f44336', true);
+                this.player = new Player(canvas.width / 2 - 15, canvas.height - 120, '#2196F3');
+                this.ai = new Player(canvas.width / 2 - 15, 80, '#f44336', true);
                 this.ball = new Ball();
                 this.playerScore = 0;
                 this.aiScore = 0;
@@ -319,14 +317,14 @@
             drawField() {
                 // フィールド
                 ctx.fillStyle = '#27ae60';
-                ctx.fillRect(0, 0, canvas.width, canvas.height - 50);
+                ctx.fillRect(30, 30, canvas.width - 60, canvas.height - 60);
 
                 // センターライン
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.moveTo(canvas.width / 2, 0);
-                ctx.lineTo(canvas.width / 2, canvas.height - 50);
+                ctx.moveTo(30, canvas.height / 2);
+                ctx.lineTo(canvas.width - 30, canvas.height / 2);
                 ctx.stroke();
 
                 // センターサークル
@@ -334,32 +332,37 @@
                 ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
                 ctx.stroke();
 
-                // 左ゴール
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(0, canvas.height - 150, 20, 100);
+                // 上ゴール (AI側)
+                ctx.fillStyle = 'rgba(244, 67, 54, 0.3)';
+                ctx.fillRect(canvas.width / 2 - 60, 10, 120, 20);
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 3;
-                ctx.strokeRect(0, canvas.height - 150, 20, 100);
+                ctx.strokeRect(canvas.width / 2 - 60, 10, 120, 20);
 
-                // 右ゴール
-                ctx.fillRect(canvas.width - 20, canvas.height - 150, 20, 100);
-                ctx.strokeRect(canvas.width - 20, canvas.height - 150, 20, 100);
+                // 下ゴール (プレイヤー側)
+                ctx.fillStyle = 'rgba(33, 150, 243, 0.3)';
+                ctx.fillRect(canvas.width / 2 - 60, canvas.height - 30, 120, 20);
+                ctx.strokeRect(canvas.width / 2 - 60, canvas.height - 30, 120, 20);
 
-                // 地面
+                // 左右の壁
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+                ctx.fillRect(0, 0, 30, canvas.height);
+                ctx.fillRect(canvas.width - 30, 0, 30, canvas.height);
             }
 
             updateAI() {
                 // AIの簡単な動作
                 const ballX = this.ball.x;
+                const ballY = this.ball.y;
                 const aiCenter = this.ai.x + this.ai.width / 2;
 
-                // ボールを追いかける
-                if (ballX > aiCenter + 20) {
-                    this.ai.vx = PLAYER_SPEED * 0.8;
-                } else if (ballX < aiCenter - 20) {
-                    this.ai.vx = -PLAYER_SPEED * 0.8;
+                // ボールを横方向に追いかける（上半分にいる時）
+                if (ballY < canvas.height / 2) {
+                    if (ballX > aiCenter + 20) {
+                        this.ai.vx = PLAYER_SPEED * 0.8;
+                    } else if (ballX < aiCenter - 20) {
+                        this.ai.vx = -PLAYER_SPEED * 0.8;
+                    }
                 }
 
                 // ボールが近くにあったらシュート
