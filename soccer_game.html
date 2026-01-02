@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サッカーゲーム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+
+        .game-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+
+        .score {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .player-score {
+            color: #2196F3;
+        }
+
+        .ai-score {
+            color: #f44336;
+        }
+
+        canvas {
+            border: 3px solid #333;
+            display: block;
+            background: #2ecc71;
+            background: linear-gradient(to bottom, #2ecc71 0%, #27ae60 100%);
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .controls p {
+            margin: 5px 0;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        .game-over h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        .game-over button {
+            padding: 10px 30px;
+            font-size: 18px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .game-over button:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>サッカーゲーム</h1>
+        <div class="scoreboard">
+            <div>
+                <span>プレイヤー: </span>
+                <span class="score player-score" id="playerScore">0</span>
+            </div>
+            <div>
+                <span>AI: </span>
+                <span class="score ai-score" id="aiScore">0</span>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="controls">
+            <p><strong>操作方法:</strong></p>
+            <p>← → キー: 左右移動 | ↑ キー: ジャンプ | スペースキー: シュート</p>
+            <p>目標: AIより多くゴールを決めよう！</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const playerScoreEl = document.getElementById('playerScore');
+        const aiScoreEl = document.getElementById('aiScore');
+
+        // ゲーム設定
+        const GRAVITY = 0.5;
+        const FRICTION = 0.8;
+        const PLAYER_SPEED = 5;
+        const JUMP_FORCE = 12;
+        const BALL_BOUNCE = 0.7;
+        const SHOOT_POWER = 15;
+
+        // キー入力
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key] = true);
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // プレイヤークラス
+        class Player {
+            constructor(x, y, color, isAI = false) {
+                this.x = x;
+                this.y = y;
+                this.width = 30;
+                this.height = 40;
+                this.color = color;
+                this.vx = 0;
+                this.vy = 0;
+                this.isAI = isAI;
+                this.onGround = false;
+            }
+
+            update() {
+                // 重力
+                this.vy += GRAVITY;
+                this.y += this.vy;
+
+                // 地面との衝突
+                if (this.y + this.height >= canvas.height - 50) {
+                    this.y = canvas.height - 50 - this.height;
+                    this.vy = 0;
+                    this.onGround = true;
+                } else {
+                    this.onGround = false;
+                }
+
+                // 水平移動
+                this.x += this.vx;
+                this.vx *= FRICTION;
+
+                // 画面端での制限
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+            }
+
+            draw() {
+                // 体
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // 頭
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 目
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x + 8, this.y - 3, 5, 5);
+                ctx.fillRect(this.x + 17, this.y - 3, 5, 5);
+            }
+
+            shoot(ball) {
+                const dx = ball.x - (this.x + this.width / 2);
+                const dy = ball.y - (this.y + this.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 50) {
+                    const angle = Math.atan2(dy, dx);
+                    ball.vx = Math.cos(angle) * SHOOT_POWER;
+                    ball.vy = Math.sin(angle) * SHOOT_POWER - 3;
+                }
+            }
+        }
+
+        // ボールクラス
+        class Ball {
+            constructor() {
+                this.reset();
+                this.radius = 15;
+            }
+
+            reset() {
+                this.x = canvas.width / 2;
+                this.y = canvas.height / 2;
+                this.vx = 0;
+                this.vy = 0;
+            }
+
+            update() {
+                this.vy += GRAVITY;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // 地面との衝突
+                if (this.y + this.radius >= canvas.height - 50) {
+                    this.y = canvas.height - 50 - this.radius;
+                    this.vy *= -BALL_BOUNCE;
+                    this.vx *= FRICTION;
+                }
+
+                // 壁との衝突
+                if (this.x - this.radius <= 0 || this.x + this.radius >= canvas.width) {
+                    this.vx *= -1;
+                    this.x = this.x < canvas.width / 2 ? this.radius : canvas.width - this.radius;
+                }
+
+                // 天井との衝突
+                if (this.y - this.radius <= 0) {
+                    this.y = this.radius;
+                    this.vy *= -BALL_BOUNCE;
+                }
+
+                // ゴール判定
+                if (this.y + this.radius >= canvas.height - 50) {
+                    // 左ゴール (AIの得点)
+                    if (this.x < 100) {
+                        game.aiScore++;
+                        aiScoreEl.textContent = game.aiScore;
+                        this.reset();
+                    }
+                    // 右ゴール (プレイヤーの得点)
+                    if (this.x > canvas.width - 100) {
+                        game.playerScore++;
+                        playerScoreEl.textContent = game.playerScore;
+                        this.reset();
+                    }
+                }
+            }
+
+            draw() {
+                // ボール本体
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // ボールの模様
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 五角形の模様
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 2 * Math.PI / 5) - Math.PI / 2;
+                    const x = this.x + Math.cos(angle) * this.radius / 2;
+                    const y = this.y + Math.sin(angle) * this.radius / 2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                }
+            }
+
+            checkCollision(player) {
+                const dx = this.x - (player.x + player.width / 2);
+                const dy = this.y - (player.y + player.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < this.radius + player.width / 2) {
+                    const angle = Math.atan2(dy, dx);
+                    const force = 8;
+                    this.vx = Math.cos(angle) * force;
+                    this.vy = Math.sin(angle) * force;
+                }
+            }
+        }
+
+        // ゲームクラス
+        class Game {
+            constructor() {
+                this.player = new Player(100, canvas.height - 150, '#2196F3');
+                this.ai = new Player(canvas.width - 130, canvas.height - 150, '#f44336', true);
+                this.ball = new Ball();
+                this.playerScore = 0;
+                this.aiScore = 0;
+            }
+
+            drawField() {
+                // フィールド
+                ctx.fillStyle = '#27ae60';
+                ctx.fillRect(0, 0, canvas.width, canvas.height - 50);
+
+                // センターライン
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(canvas.width / 2, 0);
+                ctx.lineTo(canvas.width / 2, canvas.height - 50);
+                ctx.stroke();
+
+                // センターサークル
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 左ゴール
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(0, canvas.height - 150, 20, 100);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(0, canvas.height - 150, 20, 100);
+
+                // 右ゴール
+                ctx.fillRect(canvas.width - 20, canvas.height - 150, 20, 100);
+                ctx.strokeRect(canvas.width - 20, canvas.height - 150, 20, 100);
+
+                // 地面
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+            }
+
+            updateAI() {
+                // AIの簡単な動作
+                const ballX = this.ball.x;
+                const aiCenter = this.ai.x + this.ai.width / 2;
+
+                // ボールを追いかける
+                if (ballX > aiCenter + 20) {
+                    this.ai.vx = PLAYER_SPEED * 0.8;
+                } else if (ballX < aiCenter - 20) {
+                    this.ai.vx = -PLAYER_SPEED * 0.8;
+                }
+
+                // ボールが近くにあったらシュート
+                const dx = this.ball.x - aiCenter;
+                const dy = this.ball.y - (this.ai.y + this.ai.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 60 && Math.random() > 0.95) {
+                    this.ai.shoot(this.ball);
+                }
+
+                // ランダムジャンプ
+                if (this.ai.onGround && Math.random() > 0.98) {
+                    this.ai.vy = -JUMP_FORCE;
+                }
+            }
+
+            update() {
+                // プレイヤー操作
+                if (keys['ArrowLeft']) this.player.vx = -PLAYER_SPEED;
+                if (keys['ArrowRight']) this.player.vx = PLAYER_SPEED;
+                if (keys['ArrowUp'] && this.player.onGround) this.player.vy = -JUMP_FORCE;
+                if (keys[' ']) this.player.shoot(this.ball);
+
+                // 更新
+                this.player.update();
+                this.ai.update();
+                this.ball.update();
+                this.updateAI();
+
+                // 衝突判定
+                this.ball.checkCollision(this.player);
+                this.ball.checkCollision(this.ai);
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.drawField();
+                this.player.draw();
+                this.ai.draw();
+                this.ball.draw();
+            }
+        }
+
+        // ゲーム開始
+        const game = new Game();
+
+        function gameLoop() {
+            game.update();
+            game.draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
